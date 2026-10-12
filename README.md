@@ -9,9 +9,12 @@ A command-line tool that checks whether a website is up or down, measures its re
 - Checks any website URL for availability
 - Measures response time in milliseconds
 - Reports HTTP status code and UP/DOWN status
-- Saves every check to `history.json` automatically
-- Handles timeouts and connection errors gracefully
-- Works on Windows (uses system SSL certificates)
+- Detects and reports redirect chains
+- Handles SSL errors, timeouts, and connection failures gracefully
+- Blocks requests to localhost and private IP addresses (SSRF protection)
+- Saves every check to `history.json` automatically using atomic writes
+- View and filter saved history from the terminal
+- 21 automated tests covering validation, security, storage, and checks
 
 ---
 
@@ -28,23 +31,24 @@ A command-line tool that checks whether a website is up or down, measures its re
 
 ```bash
 git clone https://github.com/isaad-ui/website-uptime-monitor.git
-cd website-uptime-monitor
+cd website-uptime-monitor/website-uptime-monitor
 ```
 
 2. Install dependencies:
 
 ```bash
-pip install -r requirements.txt
+pip install -r ../requirements.txt
 ```
 
-> **Note:** `pip-system-certs` is a Windows-only package that fixes SSL verification issues. If you are on Linux or Mac, remove that line from `requirements.txt` before installing.
+> **Windows only:** `pip-system-certs` fixes SSL certificate verification on Windows. If you are on Linux or Mac, remove that line from `requirements.txt` before installing and remove the `import pip_system_certs.wrapt_requests` line from `main.py`.
 
 ---
 
 ## Usage
 
+### Check a website
+
 ```bash
-cd website-uptime-monitor
 python main.py
 ```
 
@@ -56,7 +60,7 @@ Enter website URL: github.com
 
 You can enter a URL with or without `https://` — the tool adds it automatically.
 
-**Example output:**
+**Example output (site is up):**
 
 ```
 Status code: 200
@@ -64,6 +68,65 @@ Response time: 312.45 ms
 Status: UP
 History saved to /path/to/history.json
 ```
+
+**Example output (redirect):**
+
+```
+Redirected (1 hop(s)) -> https://www.example.com/
+Status code: 200
+Response time: 408.12 ms
+Status: UP
+History saved to /path/to/history.json
+```
+
+**Example output (site is down):**
+
+```
+SSL certificate error.
+Status: DOWN
+History saved to /path/to/history.json
+```
+
+### View history
+
+```bash
+python main.py --history
+```
+
+**Filter by URL (partial match):**
+
+```bash
+python main.py --history --url github
+```
+
+**Filter by status:**
+
+```bash
+python main.py --history --status DOWN
+```
+
+**Combine filters:**
+
+```bash
+python main.py --history --url github --status UP
+```
+
+**Example output:**
+
+```
+Time                   URL                                      Status  Code   ms
+-------------------------------------------------------------------------------------
+2026-10-12 14:05:33    https://github.com                       UP      200    312.45
+2026-10-12 14:06:45    http://fake-site.com                     DOWN    None   None
+```
+
+---
+
+## Security
+
+- Requests to `localhost`, `127.0.0.1`, and private IP ranges (`10.x`, `172.16.x`, `192.168.x`) are blocked to prevent server-side request forgery (SSRF).
+- No secrets, API keys, or credentials are stored anywhere in the project.
+- History writes are atomic — a crash mid-write cannot corrupt the existing file.
 
 ---
 
@@ -92,7 +155,25 @@ Every check is appended to `history.json` in the same folder as `main.py`. The f
 ]
 ```
 
-> **Important for deployment:** `history.json` is excluded from version control (listed in `.gitignore`). If you copy this project to another machine or a server, the history starts fresh. To keep history across machines, back up `history.json` manually or store it on a shared/persistent drive.
+> **Note:** `history.json` is excluded from version control. If you move the project to another machine, copy `history.json` manually to preserve your history.
+>
+> **JSON storage limitation:** JSON works well for hundreds of records. If you run thousands of checks, consider migrating to SQLite using Python's built-in `sqlite3` module.
+
+---
+
+## Running tests
+
+```bash
+cd website-uptime-monitor
+python -m pytest test_main.py -v
+```
+
+All 21 tests should pass. Tests cover:
+
+- URL normalisation and validation
+- Localhost and private IP blocking
+- History file loading (including corrupt and missing files)
+- Website check responses: 200, 404, 500, timeout, SSL error, connection error, too many redirects
 
 ---
 
@@ -106,20 +187,40 @@ To run it on any machine:
 2. Clone the repo and install dependencies (see Installation above)
 3. Run `python main.py`
 
-If you want to run it on a schedule (e.g. check a site every hour), use:
+To check a site on a schedule:
 
 - **Windows:** Task Scheduler
 - **Linux/Mac:** `cron`
 
+### Deployment checklist
+
+- [ ] Python 3.8+ installed
+- [ ] Dependencies installed: `pip install -r requirements.txt`
+- [ ] On Linux/Mac: remove `pip-system-certs` from `requirements.txt` and its import from `main.py`
+- [ ] Tests pass: `python -m pytest test_main.py -v`
+- [ ] Script runs without errors: `python main.py`
+- [ ] `history.json` backed up if migrating from another machine
+
 ---
 
-## Deployment checklist
+## Architecture
 
-- [ ] Python 3.8+ installed on the target machine
-- [ ] Dependencies installed via `pip install -r requirements.txt`
-- [ ] `history.json` backed up if you are migrating from another machine
-- [ ] On Linux/Mac: `pip-system-certs` removed from `requirements.txt`
-- [ ] Script runs without errors: `python main.py`
+```
+website-uptime-monitor/
+├── requirements.txt          # pinned dependencies
+├── README.md
+└── website-uptime-monitor/
+    ├── main.py               # all logic: validation, checking, history, CLI
+    ├── test_main.py          # 21 automated tests (unittest + pytest)
+    └── history.json          # local check history (gitignored)
+```
+
+`main.py` is structured as four layers:
+
+1. **Security** — `validate_url`, `is_private_ip`: block bad input before any network call
+2. **History** — `load_history`, `save_history`, `print_history`: read/write/display JSON records
+3. **Check** — `check_website`: make the HTTP request, return structured result
+4. **CLI** — `main`: parse arguments, call the layers above, print output
 
 ---
 
