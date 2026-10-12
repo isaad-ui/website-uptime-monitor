@@ -1,5 +1,7 @@
 # Website Uptime Monitor
 
+![Tests](https://github.com/isaad-ui/website-uptime-monitor/actions/workflows/tests.yml/badge.svg)
+
 A command-line tool that checks whether a website is up or down, measures its response time, and saves every check to a local `history.json` file.
 
 ---
