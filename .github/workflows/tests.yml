@@ -1,0 +1,34 @@
+name: Tests
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install requests==2.34.2 pytest==8.2.2
+        # pip-system-certs is Windows-only and not needed on Ubuntu
+
+      - name: Patch Windows-only import for CI
+        run: |
+          sed -i 's/import pip_system_certs.wrapt_requests//' website-uptime-monitor/main.py
+
+      - name: Run tests
+        run: |
+          cd website-uptime-monitor
+          python -m pytest test_main.py -v
