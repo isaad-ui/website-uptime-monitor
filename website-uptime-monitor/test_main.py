@@ -159,3 +159,73 @@ class TestCheckWebsite(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestLogging(unittest.TestCase):
+    """Verify that the right log levels fire for each check outcome."""
+
+    def _check_with_log(self, side_effect=None, return_value=None):
+        """Run check_website and capture log output."""
+        mock = MagicMock()
+        mock.status_code = 200
+        mock.history = []
+        mock.url = "https://example.com"
+
+        # Logger name is "main" when the module is imported (not "__main__")
+        with self.assertLogs("main", level="DEBUG") as log_ctx:
+            if side_effect:
+                with patch("requests.get", side_effect=side_effect):
+                    result = main.check_website("https://example.com")
+            else:
+                with patch("requests.get", return_value=return_value or mock):
+                    result = main.check_website("https://example.com")
+        return result, log_ctx.output
+
+    def test_successful_check_logs_info(self):
+        mock = MagicMock()
+        mock.status_code = 200
+        mock.history = []
+        mock.url = "https://example.com"
+        _, logs = self._check_with_log(return_value=mock)
+        info_logs = [l for l in logs if "INFO" in l]
+        self.assertTrue(any("UP" in l for l in info_logs))
+
+    def test_timeout_logs_warning(self):
+        import requests as req
+        _, logs = self._check_with_log(side_effect=req.exceptions.Timeout)
+        warning_logs = [l for l in logs if "WARNING" in l]
+        self.assertTrue(any("timeout" in l.lower() for l in warning_logs))
+
+    def test_ssl_error_logs_error(self):
+        import requests as req
+        _, logs = self._check_with_log(side_effect=req.exceptions.SSLError)
+        error_logs = [l for l in logs if "ERROR" in l]
+        self.assertTrue(any("ssl" in l.lower() for l in error_logs))
+
+    def test_connection_error_logs_warning(self):
+        import requests as req
+        _, logs = self._check_with_log(side_effect=req.exceptions.ConnectionError)
+        warning_logs = [l for l in logs if "WARNING" in l]
+        self.assertTrue(len(warning_logs) > 0)
+
+    def test_logs_do_not_contain_passwords(self):
+        """Confirm no accidental password or token leakage in log output."""
+        mock = MagicMock()
+        mock.status_code = 200
+        mock.history = []
+        mock.url = "https://example.com"
+        _, logs = self._check_with_log(return_value=mock)
+        combined = " ".join(logs).lower()
+        for sensitive in ("password", "token", "secret", "api_key", "authorization"):
+            self.assertNotIn(sensitive, combined)
+
+    def test_validate_url_logs_warning_for_localhost(self):
+        with self.assertLogs("main", level="WARNING") as log_ctx:
+            main.validate_url("localhost")
+        self.assertTrue(any("localhost" in l.lower() or "blocked" in l.lower() for l in log_ctx.output))
+
+    def test_validate_url_logs_warning_for_private_ip(self):
+        with patch("socket.gethostbyname", return_value="192.168.1.1"):
+            with self.assertLogs("main", level="WARNING") as log_ctx:
+                main.validate_url("someinternal.host")
+        self.assertTrue(any("private" in l.lower() or "blocked" in l.lower() for l in log_ctx.output))
