@@ -1,3 +1,4 @@
+import logging
 import requests
 import requests.exceptions
 import time
@@ -9,7 +10,9 @@ import argparse
 from datetime import datetime
 from urllib.parse import urlparse
 import pip_system_certs.wrapt_requests
-from config import REQUEST_TIMEOUT, MAX_HISTORY_DISPLAY
+from config import REQUEST_TIMEOUT, MAX_HISTORY_DISPLAY, setup_logging
+
+logger = logging.getLogger(__name__)
 
 HISTORY_FILE = os.path.join(os.path.dirname(__file__), "history.json")
 HISTORY_TMP = HISTORY_FILE + ".tmp"
@@ -49,14 +52,18 @@ def validate_url(raw):
     hostname = parsed.hostname
 
     if not hostname:
+        logger.warning("URL validation failed — could not parse hostname: %r", raw)
         return None, "Invalid URL: could not parse hostname."
 
     if hostname.lower() in ("localhost", "127.0.0.1", "::1"):
+        logger.warning("Blocked request to localhost from input: %r", raw)
         return None, "Blocked: localhost is not allowed."
 
     if is_private_ip(hostname):
+        logger.warning("Blocked request to private IP for hostname: %s", hostname)
         return None, "Blocked: private/internal IP addresses are not allowed."
 
+    logger.debug("URL validated: %s", raw)
     return raw, None
 
 
@@ -65,12 +72,19 @@ def validate_url(raw):
 def load_history():
     """Load history from file. Return empty list on any error."""
     if not os.path.exists(HISTORY_FILE):
+        logger.debug("History file not found, starting with empty list")
         return []
     try:
         with open(HISTORY_FILE, "r") as f:
             data = json.load(f)
-        return data if isinstance(data, list) else []
-    except (json.JSONDecodeError, OSError):
+        result = data if isinstance(data, list) else []
+        logger.debug("Loaded %d history records", len(result))
+        return result
+    except json.JSONDecodeError:
+        logger.error("History file contains invalid JSON — returning empty list")
+        return []
+    except OSError as e:
+        logger.error("Could not read history file: %s", e)
         return []
 
 
@@ -87,12 +101,16 @@ def save_history(url, status_code, uptime_status, response_time_ms):
     history = load_history()
     history.append(record)
 
-    # Write to a temp file first, then replace — prevents corruption on crash
-    with open(HISTORY_TMP, "w") as f:
-        json.dump(history, f, indent=2)
-    os.replace(HISTORY_TMP, HISTORY_FILE)
-
-    print(f"History saved to {HISTORY_FILE}")
+    try:
+        with open(HISTORY_TMP, "w") as f:
+            json.dump(history, f, indent=2)
+        os.replace(HISTORY_TMP, HISTORY_FILE)
+        logger.info("History saved — %s %s (code=%s, ms=%s)",
+                    uptime_status, url, status_code, record["response_time_ms"])
+        print(f"History saved to {HISTORY_FILE}")
+    except OSError as e:
+        logger.error("Failed to save history for %s: %s", url, e)
+        print("Warning: could not save history.")
 
 
 def print_history(filter_url=None, filter_status=None):
@@ -124,37 +142,59 @@ def print_history(filter_url=None, filter_status=None):
 # ---------- check ----------
 
 def check_website(url):
-    """Run the uptime check. Returns (status_code, uptime_status, elapsed_ms, error_msg)."""
+    """
+    Run the uptime check.
+    Returns (status_code, uptime_status, elapsed_ms, error_msg).
+    error_msg is None on success.
+    """
+    logger.info("Checking %s", url)
     try:
         start = time.perf_counter()
         response = requests.get(url, timeout=REQUEST_TIMEOUT, allow_redirects=True)
         elapsed = (time.perf_counter() - start) * 1000
 
-        if len(response.history) > 0:
+        if response.history:
+            logger.debug("Redirected %d hop(s): %s -> %s",
+                         len(response.history), url, response.url)
             print(f"Redirected ({len(response.history)} hop(s)) -> {response.url}")
 
         uptime_status = "UP" if response.status_code < 400 else "DOWN"
+        logger.info("Result: %s | code=%d | %.0f ms | %s",
+                    uptime_status, response.status_code, elapsed, url)
         return response.status_code, uptime_status, elapsed, None
 
     except requests.exceptions.SSLError:
+        logger.error("SSL error checking %s", url)
         return None, "DOWN", None, "SSL certificate error."
 
     except requests.exceptions.Timeout:
+        logger.warning("Timeout after %ds checking %s", REQUEST_TIMEOUT, url)
         return None, "DOWN", None, "Request timed out."
 
-    except requests.exceptions.ConnectionError:
+    except requests.exceptions.ConnectionError as e:
+        # Distinguish DNS failures from general connection errors
+        msg = str(e).lower()
+        if "name or service not known" in msg or "nodename nor servname" in msg or "getaddrinfo" in msg:
+            logger.warning("DNS resolution failed for %s", url)
+            return None, "DOWN", None, "Could not resolve hostname."
+        logger.warning("Connection error checking %s", url)
         return None, "DOWN", None, "Could not connect to website."
 
     except requests.exceptions.TooManyRedirects:
+        logger.warning("Too many redirects for %s", url)
         return None, "DOWN", None, "Too many redirects."
 
     except requests.exceptions.RequestException as e:
+        logger.error("Unexpected request error for %s: %s", url, e)
         return None, "DOWN", None, f"Request failed: {e}"
 
 
 # ---------- main ----------
 
 def main():
+    setup_logging()
+    logger.debug("Application started")
+
     parser = argparse.ArgumentParser(description="Website Uptime Monitor")
     parser.add_argument("--history", action="store_true", help="Show saved check history")
     parser.add_argument("--url", help="Filter history by URL (partial match)")
@@ -163,11 +203,13 @@ def main():
 
     if args.history:
         print_history(filter_url=args.url, filter_status=args.status)
+        logger.debug("Application exiting after history display")
         return
 
     raw = input("Enter website URL: ").strip()
     if not raw:
         print("No URL entered.")
+        logger.warning("User submitted empty URL input")
         return
 
     url, error = validate_url(raw)
@@ -185,6 +227,7 @@ def main():
 
     print(f"Status: {uptime_status}")
     save_history(url, status_code, uptime_status, elapsed)
+    logger.debug("Application exiting normally")
 
 
 if __name__ == "__main__":
