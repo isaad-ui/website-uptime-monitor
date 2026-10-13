@@ -2,290 +2,347 @@
 
 ![Tests](https://github.com/isaad-ui/website-uptime-monitor/actions/workflows/tests.yml/badge.svg)
 
-A command-line tool that checks whether a website is up or down, measures its response time, and saves every check to a local `history.json` file.
+A full-stack monitoring application that checks whether websites are up or down, tracks response times, saves check history, and displays results in a React dashboard.
 
 ---
 
 ## Features
 
-- Checks any website URL for availability
-- Measures response time in milliseconds
-- Reports HTTP status code and UP/DOWN status
-- Detects and reports redirect chains
-- Handles SSL errors, timeouts, DNS failures, and connection errors gracefully
-- Distinguishes DNS failures from connection errors in logs and output
+- Check any public website URL for availability
+- Measures and displays HTTP status code and response time in milliseconds
+- Detects redirect chains and reports hops
+- Handles SSL errors, timeouts, DNS failures, and connection errors
 - Blocks requests to localhost and private IP addresses (SSRF protection)
-- Saves every check to `history.json` automatically using atomic writes
-- View and filter saved history from the terminal
+- Saves every check to persistent JSON history with atomic writes
+- React dashboard with real-time statistics and filterable history table
+- Auto-refreshes every 30 seconds with a manual refresh button
+- Shows API health status — distinguishes backend downtime from a website being DOWN
+- History filtering by URL and UP/DOWN status with pagination
 - Structured logging with configurable levels and optional log file rotation
-- 28 automated tests covering validation, security, storage, checks, and logging
+- Configurable via environment variables
+- 67 automated tests (28 CLI + 22 API + 17 frontend)
+- GitHub Actions CI runs all tests and the production build on every push
 
 ---
 
-## Requirements
+## Technology stack
+
+| Layer | Technology |
+|-------|-----------|
+| Monitoring logic | Python 3, `requests` |
+| API | FastAPI, uvicorn |
+| Frontend | React 18, Vite |
+| Testing (Python) | pytest, unittest.mock |
+| Testing (frontend) | Vitest, Testing Library |
+| Storage | JSON file with atomic writes |
+| CI | GitHub Actions |
+
+---
+
+## Project structure
+
+```
+website-uptime-monitor/
+├── .github/
+│   ├── workflows/tests.yml        # CI: Python tests + frontend tests + build
+│   ├── ISSUE_TEMPLATE/
+│   └── PULL_REQUEST_TEMPLATE.md
+├── backend/
+│   ├── api.py                     # FastAPI app — POST /check, GET /history, GET /stats
+│   └── test_api.py                # 22 API tests
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── Dashboard.jsx      # Root component, auto-refresh, API health
+│   │   │   ├── WebsiteCheckForm.jsx
+│   │   │   ├── StatisticsCards.jsx
+│   │   │   ├── HistoryTable.jsx
+│   │   │   ├── HistoryFilters.jsx
+│   │   │   ├── StatusBadge.jsx
+│   │   │   ├── StatCard.jsx
+│   │   │   ├── LoadingSpinner.jsx
+│   │   │   └── Dashboard.test.jsx # 17 frontend tests
+│   │   ├── services/
+│   │   │   └── api.js             # All fetch calls — checkWebsite, getHistory, getStats
+│   │   ├── App.jsx
+│   │   ├── main.jsx
+│   │   └── index.css              # Design system — dark theme, responsive
+│   ├── index.html
+│   ├── vite.config.js
+│   ├── package.json
+│   └── .env.example
+├── website-uptime-monitor/
+│   ├── main.py                    # CLI — validation, SSRF, check, history, logging
+│   ├── config.py                  # Environment variable configuration
+│   └── test_main.py               # 28 CLI tests
+├── .env.example                   # Backend environment variables
+├── requirements.txt
+├── CONTRIBUTING.md
+└── LICENSE
+```
+
+---
+
+## Prerequisites
 
 - Python 3.8 or higher
-- pip
+- Node.js 18 or higher
+- pip and npm
 
 ---
 
 ## Installation
 
-1. Clone the repository:
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/isaad-ui/website-uptime-monitor.git
-cd website-uptime-monitor/website-uptime-monitor
+cd website-uptime-monitor
 ```
 
-2. Install dependencies:
+### 2. Install Python dependencies
 
 ```bash
-pip install -r ../requirements.txt
+pip install -r requirements.txt
 ```
 
-> **Windows only:** `pip-system-certs` fixes SSL certificate verification on Windows. If you are on Linux or Mac, remove that line from `requirements.txt` before installing and remove the `import pip_system_certs.wrapt_requests` line from `main.py`.
+> **Windows only:** `pip-system-certs` fixes SSL certificate verification on Windows.
+> On Linux or macOS, remove `pip-system-certs` from `requirements.txt` and remove
+> `import pip_system_certs.wrapt_requests` from `website-uptime-monitor/main.py`.
+
+### 3. Install frontend dependencies
+
+```bash
+cd frontend
+npm install
+cd ..
+```
+
+> **Windows SSL note:** If `npm install` fails with `UNABLE_TO_VERIFY_LEAF_SIGNATURE`,
+> run `npm config set strict-ssl false` once, then retry.
+
+### 4. Configure environment variables (optional)
+
+```bash
+# Backend
+cp .env.example .env
+
+# Frontend
+cp frontend/.env.example frontend/.env
+```
+
+The defaults work for local development without any changes.
 
 ---
 
-## Usage
+## Running the application
 
-### Check a website
+**Terminal 1 — start the backend:**
 
 ```bash
+cd backend
+uvicorn api:app --reload --port 8000
+```
+
+**Terminal 2 — start the frontend:**
+
+```bash
+cd frontend
+npm run dev
+```
+
+Then open **http://localhost:5173** in your browser.
+
+The interactive API documentation is available at **http://localhost:8000/docs**.
+
+### CLI (no frontend needed)
+
+```bash
+cd website-uptime-monitor
 python main.py
-```
+# Enter website URL: github.com
 
-You will be prompted to enter a URL:
-
-```
-Enter website URL: github.com
-```
-
-You can enter a URL with or without `https://` — the tool adds it automatically.
-
-**Example output (site is up):**
-
-```
-Status code: 200
-Response time: 312.45 ms
-Status: UP
-History saved to /path/to/history.json
-```
-
-**Example output (redirect):**
-
-```
-Redirected (1 hop(s)) -> https://www.example.com/
-Status code: 200
-Response time: 408.12 ms
-Status: UP
-History saved to /path/to/history.json
-```
-
-**Example output (site is down):**
-
-```
-SSL certificate error.
-Status: DOWN
-History saved to /path/to/history.json
-```
-
-### View history
-
-```bash
+# View history
 python main.py --history
-```
 
-**Filter by URL (partial match):**
-
-```bash
-python main.py --history --url github
-```
-
-**Filter by status:**
-
-```bash
-python main.py --history --status DOWN
-```
-
-**Combine filters:**
-
-```bash
+# Filter history
 python main.py --history --url github --status UP
 ```
 
-**Example output:**
+---
 
+## Environment variables
+
+### Backend (`.env` or shell)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `REQUEST_TIMEOUT` | `10` | Seconds before a check times out (1–60) |
+| `MAX_HISTORY_DISPLAY` | `100` | Max records shown by `--history` |
+| `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, or `ERROR` |
+| `LOG_FILE` | *(empty)* | Path to a log file — empty means terminal only |
+| `LOG_MAX_BYTES` | `1048576` | Log file rotation size in bytes (1 MB) |
+| `LOG_BACKUP_COUNT` | `3` | Number of rotated log files to keep |
+
+### Frontend (`frontend/.env`)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VITE_API_URL` | `http://localhost:8000` | Backend API base URL |
+
+---
+
+## API endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/` | Health check |
+| `POST` | `/check` | Check a website |
+| `GET` | `/history` | Retrieve check history |
+| `GET` | `/stats` | Retrieve monitoring statistics |
+
+### POST /check
+
+**Request:**
+```json
+{ "url": "github.com" }
 ```
-Time                   URL                                      Status  Code   ms
--------------------------------------------------------------------------------------
-2026-10-12 14:05:33    https://github.com                       UP      200    312.45
-2026-10-12 14:06:45    http://fake-site.com                     DOWN    None   None
+
+**Response:**
+```json
+{
+  "url": "https://github.com",
+  "checked_at": "2026-10-13 10:00:00",
+  "status": "UP",
+  "status_code": 200,
+  "response_time_ms": 312.45,
+  "error": null
+}
+```
+
+### GET /history
+
+Query parameters: `url` (partial match), `status` (`UP`/`DOWN`), `limit` (1–1000, default 100)
+
+### GET /stats
+
+Query parameters: `url` (partial match)
+
+**Response:**
+```json
+{
+  "total_checks": 10,
+  "up_count": 9,
+  "down_count": 1,
+  "uptime_percent": 90.0,
+  "average_response_ms": 287.33,
+  "last_checked": "2026-10-13 10:00:00"
+}
+```
+
+---
+
+## Running tests
+
+### Python tests (CLI + API)
+
+```bash
+# CLI tests
+cd website-uptime-monitor
+python -m pytest test_main.py -v
+
+# API tests
+cd backend
+python -m pytest test_api.py -v
+```
+
+### Frontend tests
+
+```bash
+cd frontend
+npm test
+```
+
+### All tests pass locally:
+
+| Suite | Tests | Result |
+|-------|-------|--------|
+| CLI (`test_main.py`) | 28 | ✅ Pass |
+| API (`test_api.py`) | 22 | ✅ Pass |
+| Frontend (`Dashboard.test.jsx`) | 17 | ✅ Pass |
+
+---
+
+## Production build
+
+```bash
+cd frontend
+npm run build
+```
+
+The optimised output is written to `frontend/dist/`. Serve it with any static file host (Netlify, Vercel, GitHub Pages, nginx).
+
+Set `VITE_API_URL` to your production backend URL before building:
+
+```bash
+VITE_API_URL=https://api.your-domain.com npm run build
+```
+
+---
+
+## Deployment
+
+This project has two independently deployable parts:
+
+### Backend (FastAPI)
+- Deploy to any server that runs Python: Railway, Render, Fly.io, a VPS
+- Set `CORS` origins in `backend/api.py` to your frontend's production domain
+- Use a process manager (`systemd`, `supervisor`) or the platform's native process runner
+- `history.json` is written to the same directory as `main.py` — use a persistent disk volume
+
+### Frontend (React)
+- Run `npm run build` and deploy `frontend/dist/` to Netlify, Vercel, or any static host
+- Set `VITE_API_URL` to your backend's public URL before building
+- No server required — it's a static site
+
+### CORS in production
+Update `backend/api.py` to allow your frontend domain:
+```python
+allow_origins=["https://your-frontend.netlify.app"]
 ```
 
 ---
 
 ## Security
 
-- Requests to `localhost`, `127.0.0.1`, and private IP ranges (`10.x`, `172.16.x`, `192.168.x`) are blocked to prevent server-side request forgery (SSRF).
-- No secrets, API keys, or credentials are stored anywhere in the project.
-- History writes are atomic — a crash mid-write cannot corrupt the existing file.
+- Requests to `localhost`, `127.0.0.1`, and private IP ranges are blocked (SSRF protection)
+- No secrets are stored in source code or committed to Git
+- History writes are atomic — a crash mid-write cannot corrupt the file
+- Logging never records passwords, tokens, or credentials
+- `frontend/.env` and `.env` are gitignored
 
 ---
 
-## History file
+## Known limitations
 
-Every check is appended to `history.json` in the same folder as `main.py`. The file is created automatically on the first run.
-
-**Example `history.json`:**
-
-```json
-[
-  {
-    "url": "https://github.com",
-    "checked_at": "2026-10-12 14:05:33",
-    "status_code": 200,
-    "uptime_status": "UP",
-    "response_time_ms": 312.45
-  },
-  {
-    "url": "http://fake-site.com",
-    "checked_at": "2026-10-12 14:06:45",
-    "status_code": null,
-    "uptime_status": "DOWN",
-    "response_time_ms": null
-  }
-]
-```
-
-> **Note:** `history.json` is excluded from version control. If you move the project to another machine, copy `history.json` manually to preserve your history.
->
-> **JSON storage limitation:** JSON works well for hundreds of records. If you run thousands of checks, consider migrating to SQLite using Python's built-in `sqlite3` module.
-
----
-
-## Running tests
-
-```bash
-cd website-uptime-monitor
-python -m pytest test_main.py -v
-```
-
-All 21 tests should pass. Tests cover:
-
-- URL normalisation and validation
-- Localhost and private IP blocking
-- History file loading (including corrupt and missing files)
-- Website check responses: 200, 404, 500, timeout, SSL error, connection error, too many redirects
-
----
-
-## Deployment
-
-This is a CLI tool — it runs locally on your machine. There is no web server or API to host.
-
-To run it on any machine:
-
-1. Install Python 3.8+
-2. Clone the repo and install dependencies (see Installation above)
-3. Run `python main.py`
-
-To check a site on a schedule:
-
-- **Windows:** Task Scheduler
-- **Linux/Mac:** `cron`
-
-### Logging
-
-By default the application logs to the terminal at `INFO` level. You can change this with environment variables.
-
-**Log levels** (from most to least verbose):
-- `DEBUG` — shows redirect hops, response times, every validation step
-- `INFO` — shows each check started and its result (default)
-- `WARNING` — shows timeouts, DNS failures, blocked URLs
-- `ERROR` — shows SSL errors, history write failures, unexpected exceptions
-
-**Change the log level:**
-
-```bash
-# Windows PowerShell
-$env:LOG_LEVEL="DEBUG"
-python main.py
-
-# Linux / macOS
-LOG_LEVEL=DEBUG python main.py
-```
-
-**Save logs to a rotating file:**
-
-```bash
-LOG_FILE=logs/uptime.log python main.py
-```
-
-This creates `logs/uptime.log`. When it reaches 1 MB it rotates automatically, keeping 3 old files. Both size and count are configurable — see `.env.example`.
-
-**What gets logged vs what goes in `history.json`:**
-
-| | Logs | history.json |
-|--|------|-------------|
-| Purpose | Debugging and diagnostics | Record of every check |
-| Format | Timestamped text lines | Structured JSON |
-| Persists | Optional (requires `LOG_FILE`) | Always |
-| In Git | No (`.gitignore`d) | No (`.gitignore`d) |
-
-**Common errors and their meaning:**
-
-| Message | Cause |
-|---------|-------|
-| `SSL certificate error` | Site has an invalid or expired SSL certificate |
-| `Request timed out` | Site took longer than `REQUEST_TIMEOUT` seconds to respond |
-| `Could not resolve hostname` | DNS lookup failed — check the URL spelling |
-| `Could not connect to website` | Host found but connection refused or reset |
-| `Too many redirects` | Site redirects in an infinite loop |
-| `Blocked: localhost is not allowed` | URL pointed to localhost (SSRF protection) |
-| `Blocked: private/internal IP` | URL resolved to a private network address |
-
----
-
-## Deployment checklist
-
-- [ ] Python 3.8+ installed
-- [ ] Dependencies installed: `pip install -r requirements.txt`
-- [ ] On Linux/Mac: remove `pip-system-certs` from `requirements.txt` and its import from `main.py`
-- [ ] Tests pass: `python -m pytest test_main.py -v`
-- [ ] Script runs without errors: `python main.py`
-- [ ] `history.json` backed up if migrating from another machine
-
----
-
-## Architecture
-
-```
-website-uptime-monitor/
-├── requirements.txt          # pinned dependencies
-├── README.md
-└── website-uptime-monitor/
-    ├── main.py               # all logic: validation, checking, history, CLI
-    ├── test_main.py          # 21 automated tests (unittest + pytest)
-    └── history.json          # local check history (gitignored)
-```
-
-`main.py` is structured as four layers:
-
-1. **Security** — `validate_url`, `is_private_ip`: block bad input before any network call
-2. **History** — `load_history`, `save_history`, `print_history`: read/write/display JSON records
-3. **Check** — `check_website`: make the HTTP request, return structured result
-4. **CLI** — `main`: parse arguments, call the layers above, print output
+- History is stored in a single JSON file. For thousands of records, migrate to SQLite
+- No user authentication — anyone with access to the API can check URLs and read history
+- No scheduled automatic monitoring — checks are triggered manually via the dashboard or CLI
 
 ---
 
 ## Screenshots
 
-> Add a screenshot of the terminal output here.
+> Add a screenshot of the dashboard here.
+
+---
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions and code style guide.
 
 ---
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE)
