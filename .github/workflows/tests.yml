@@ -21,7 +21,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install requests==2.34.2 pytest==8.2.2
+          pip install requests==2.34.2 pytest==8.2.2 fastapi==0.115.12 uvicorn==0.34.2 httpx==0.28.1
         # pip-system-certs is Windows-only and not needed on Ubuntu
 
       - name: Patch Windows-only import for CI
@@ -33,7 +33,12 @@ jobs:
           cd website-uptime-monitor
           python -c "import config; print('REQUEST_TIMEOUT:', config.REQUEST_TIMEOUT)"
 
-      - name: Run tests
+      - name: Run CLI tests
         run: |
           cd website-uptime-monitor
           python -m pytest test_main.py -v
+
+      - name: Run API tests
+        run: |
+          cd backend
+          python -m pytest test_api.py -v
