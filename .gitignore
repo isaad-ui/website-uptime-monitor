@@ -221,3 +221,7 @@ __marimo__/
 
 # Runtime data — generated locally, not tracked in version control
 history.json
+
+# Log files — generated locally, never committed
+*.log
+logs/
