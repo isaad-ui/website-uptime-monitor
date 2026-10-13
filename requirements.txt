@@ -1,3 +1,6 @@
 requests==2.34.2
 pytest==8.2.2
+fastapi==0.115.12
+uvicorn==0.34.2
+httpx==0.28.1
 pip-system-certs==5.3  # Windows only — remove this line on Linux/Mac
