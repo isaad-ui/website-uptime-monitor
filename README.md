@@ -12,11 +12,13 @@ A command-line tool that checks whether a website is up or down, measures its re
 - Measures response time in milliseconds
 - Reports HTTP status code and UP/DOWN status
 - Detects and reports redirect chains
-- Handles SSL errors, timeouts, and connection failures gracefully
+- Handles SSL errors, timeouts, DNS failures, and connection errors gracefully
+- Distinguishes DNS failures from connection errors in logs and output
 - Blocks requests to localhost and private IP addresses (SSRF protection)
 - Saves every check to `history.json` automatically using atomic writes
 - View and filter saved history from the terminal
-- 21 automated tests covering validation, security, storage, and checks
+- Structured logging with configurable levels and optional log file rotation
+- 28 automated tests covering validation, security, storage, checks, and logging
 
 ---
 
@@ -194,7 +196,59 @@ To check a site on a schedule:
 - **Windows:** Task Scheduler
 - **Linux/Mac:** `cron`
 
-### Deployment checklist
+### Logging
+
+By default the application logs to the terminal at `INFO` level. You can change this with environment variables.
+
+**Log levels** (from most to least verbose):
+- `DEBUG` — shows redirect hops, response times, every validation step
+- `INFO` — shows each check started and its result (default)
+- `WARNING` — shows timeouts, DNS failures, blocked URLs
+- `ERROR` — shows SSL errors, history write failures, unexpected exceptions
+
+**Change the log level:**
+
+```bash
+# Windows PowerShell
+$env:LOG_LEVEL="DEBUG"
+python main.py
+
+# Linux / macOS
+LOG_LEVEL=DEBUG python main.py
+```
+
+**Save logs to a rotating file:**
+
+```bash
+LOG_FILE=logs/uptime.log python main.py
+```
+
+This creates `logs/uptime.log`. When it reaches 1 MB it rotates automatically, keeping 3 old files. Both size and count are configurable — see `.env.example`.
+
+**What gets logged vs what goes in `history.json`:**
+
+| | Logs | history.json |
+|--|------|-------------|
+| Purpose | Debugging and diagnostics | Record of every check |
+| Format | Timestamped text lines | Structured JSON |
+| Persists | Optional (requires `LOG_FILE`) | Always |
+| In Git | No (`.gitignore`d) | No (`.gitignore`d) |
+
+**Common errors and their meaning:**
+
+| Message | Cause |
+|---------|-------|
+| `SSL certificate error` | Site has an invalid or expired SSL certificate |
+| `Request timed out` | Site took longer than `REQUEST_TIMEOUT` seconds to respond |
+| `Could not resolve hostname` | DNS lookup failed — check the URL spelling |
+| `Could not connect to website` | Host found but connection refused or reset |
+| `Too many redirects` | Site redirects in an infinite loop |
+| `Blocked: localhost is not allowed` | URL pointed to localhost (SSRF protection) |
+| `Blocked: private/internal IP` | URL resolved to a private network address |
+
+---
+
+## Deployment checklist
 
 - [ ] Python 3.8+ installed
 - [ ] Dependencies installed: `pip install -r requirements.txt`
