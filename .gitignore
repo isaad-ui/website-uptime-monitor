@@ -225,3 +225,8 @@ history.json
 # Log files — generated locally, never committed
 *.log
 logs/
+
+# Frontend build output and local config
+frontend/dist/
+frontend/node_modules/
+frontend/.env
