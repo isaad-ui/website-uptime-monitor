@@ -9,6 +9,7 @@ import argparse
 from datetime import datetime
 from urllib.parse import urlparse
 import pip_system_certs.wrapt_requests
+from config import REQUEST_TIMEOUT, MAX_HISTORY_DISPLAY
 
 HISTORY_FILE = os.path.join(os.path.dirname(__file__), "history.json")
 HISTORY_TMP = HISTORY_FILE + ".tmp"
@@ -111,6 +112,7 @@ def print_history(filter_url=None, filter_status=None):
         print("No records match your filter.")
         return
 
+    history = history[-MAX_HISTORY_DISPLAY:]
     print(f"\n{'Time':<22} {'URL':<40} {'Status':<7} {'Code':<6} {'ms'}")
     print("-" * 85)
     for r in history:
@@ -125,7 +127,7 @@ def check_website(url):
     """Run the uptime check. Returns (status_code, uptime_status, elapsed_ms, error_msg)."""
     try:
         start = time.perf_counter()
-        response = requests.get(url, timeout=10, allow_redirects=True)
+        response = requests.get(url, timeout=REQUEST_TIMEOUT, allow_redirects=True)
         elapsed = (time.perf_counter() - start) * 1000
 
         if len(response.history) > 0:
