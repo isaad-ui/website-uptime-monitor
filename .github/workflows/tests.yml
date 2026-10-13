@@ -28,6 +28,11 @@ jobs:
         run: |
           sed -i 's/import pip_system_certs.wrapt_requests//' website-uptime-monitor/main.py
 
+      - name: Verify config loads
+        run: |
+          cd website-uptime-monitor
+          python -c "import config; print('REQUEST_TIMEOUT:', config.REQUEST_TIMEOUT)"
+
       - name: Run tests
         run: |
           cd website-uptime-monitor
