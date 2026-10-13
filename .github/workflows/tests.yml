@@ -7,9 +7,8 @@ on:
     branches: ["main"]
 
 jobs:
-  test:
+  python-tests:
     runs-on: ubuntu-latest
-
     steps:
       - name: Check out code
         uses: actions/checkout@v4
@@ -42,3 +41,31 @@ jobs:
         run: |
           cd backend
           python -m pytest test_api.py -v
+
+  frontend-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Run frontend tests
+        run: |
+          cd frontend
+          npm test
+
+      - name: Build frontend (production)
+        run: |
+          cd frontend
+          npm run build
