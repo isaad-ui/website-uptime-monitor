@@ -21,11 +21,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install requests==2.34.2 pytest==8.2.2 fastapi==0.115.12 uvicorn==0.34.2 httpx==0.28.1
-        # pip-system-certs is Windows-only and not needed on Ubuntu
-
-      - name: Patch Windows-only import for CI
-        run: |
-          sed -i 's/import pip_system_certs.wrapt_requests//' website-uptime-monitor/main.py
+        # pip-system-certs is Windows-only — the conditional import in main.py handles this
 
       - name: Verify config loads
         run: |

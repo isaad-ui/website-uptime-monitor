@@ -87,7 +87,7 @@ describe('Dashboard', () => {
     api.getHistory.mockResolvedValue([])
     render(<Dashboard />)
     await waitFor(() => {
-      expect(screen.getByText(/No checks recorded yet/i)).toBeInTheDocument()
+      expect(screen.getByText(/no checks yet/i)).toBeInTheDocument()
     })
   })
 
