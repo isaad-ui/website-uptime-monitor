@@ -2,26 +2,29 @@
 
 ![Tests](https://github.com/isaad-ui/website-uptime-monitor/actions/workflows/tests.yml/badge.svg)
 
-A full-stack monitoring application that checks whether websites are up or down, tracks response times, saves check history, and displays results in a React dashboard.
+A full-stack web application that checks whether websites are up or down, tracks response times, saves check history, and displays results in a live React dashboard.
+
+**Live demo:** [website-uptime-monitor.netlify.app](https://website-uptime-monitor.netlify.app)
 
 ---
 
 ## Features
 
 - Check any public website URL for availability
-- Measures and displays HTTP status code and response time in milliseconds
-- Detects redirect chains and reports hops
-- Handles SSL errors, timeouts, DNS failures, and connection errors
+- Displays HTTP status code and response time in milliseconds
+- Detects and reports redirect chains
+- Handles SSL errors, timeouts, DNS failures, and connection errors gracefully
 - Blocks requests to localhost and private IP addresses (SSRF protection)
-- Saves every check to persistent JSON history with atomic writes
-- React dashboard with real-time statistics and filterable history table
+- Rejects dangerous URL schemes — `javascript:`, `ftp://`, `file://`
+- Saves every check to persistent history with atomic writes
+- React dashboard with live statistics and filterable history table
 - Auto-refreshes every 30 seconds with a manual refresh button
-- Shows API health status — distinguishes backend downtime from a website being DOWN
+- Distinguishes backend downtime from a monitored website being DOWN
+- Relative timestamps ("2m ago") and readable date formatting
 - History filtering by URL and UP/DOWN status with pagination
 - Structured logging with configurable levels and optional log file rotation
-- Configurable via environment variables
-- 67 automated tests (28 CLI + 22 API + 17 frontend)
-- GitHub Actions CI runs all tests and the production build on every push
+- 34 CLI tests, 22 API tests, 17 frontend tests
+- GitHub Actions CI runs all tests on every push
 
 ---
 
@@ -35,6 +38,8 @@ A full-stack monitoring application that checks whether websites are up or down,
 | Testing (Python) | pytest, unittest.mock |
 | Testing (frontend) | Vitest, Testing Library |
 | Storage | JSON file with atomic writes |
+| Backend hosting | Render |
+| Frontend hosting | Netlify |
 | CI | GitHub Actions |
 
 ---
@@ -44,16 +49,16 @@ A full-stack monitoring application that checks whether websites are up or down,
 ```
 website-uptime-monitor/
 ├── .github/
-│   ├── workflows/tests.yml        # CI: Python tests + frontend tests + build
+│   ├── workflows/tests.yml         # CI: Python + frontend tests + build
 │   ├── ISSUE_TEMPLATE/
 │   └── PULL_REQUEST_TEMPLATE.md
 ├── backend/
-│   ├── api.py                     # FastAPI app — POST /check, GET /history, GET /stats
-│   └── test_api.py                # 22 API tests
+│   ├── api.py                      # FastAPI — POST /check, GET /history, GET /stats
+│   └── test_api.py                 # 22 API tests
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── Dashboard.jsx      # Root component, auto-refresh, API health
+│   │   │   ├── Dashboard.jsx       # Root — auto-refresh, API health indicator
 │   │   │   ├── WebsiteCheckForm.jsx
 │   │   │   ├── StatisticsCards.jsx
 │   │   │   ├── HistoryTable.jsx
@@ -61,21 +66,22 @@ website-uptime-monitor/
 │   │   │   ├── StatusBadge.jsx
 │   │   │   ├── StatCard.jsx
 │   │   │   ├── LoadingSpinner.jsx
-│   │   │   └── Dashboard.test.jsx # 17 frontend tests
-│   │   ├── services/
-│   │   │   └── api.js             # All fetch calls — checkWebsite, getHistory, getStats
+│   │   │   └── Dashboard.test.jsx  # 17 frontend tests
+│   │   ├── services/api.js         # All fetch calls to the backend
 │   │   ├── App.jsx
 │   │   ├── main.jsx
-│   │   └── index.css              # Design system — dark theme, responsive
+│   │   └── index.css               # Expo Luminous design system
 │   ├── index.html
 │   ├── vite.config.js
 │   ├── package.json
 │   └── .env.example
 ├── website-uptime-monitor/
-│   ├── main.py                    # CLI — validation, SSRF, check, history, logging
-│   ├── config.py                  # Environment variable configuration
-│   └── test_main.py               # 28 CLI tests
-├── .env.example                   # Backend environment variables
+│   ├── main.py                     # CLI — validation, SSRF, check, history, logging
+│   ├── config.py                   # Environment variable configuration
+│   └── test_main.py                # 34 CLI tests
+├── render.yaml                     # Render deployment config
+├── runtime.txt                     # Python version for Render
+├── .env.example                    # Backend environment variables
 ├── requirements.txt
 ├── CONTRIBUTING.md
 └── LICENSE
@@ -91,7 +97,7 @@ website-uptime-monitor/
 
 ---
 
-## Installation
+## Local setup
 
 ### 1. Clone the repository
 
@@ -106,10 +112,6 @@ cd website-uptime-monitor
 pip install -r requirements.txt
 ```
 
-> **Windows only:** `pip-system-certs` fixes SSL certificate verification on Windows.
-> On Linux or macOS, remove `pip-system-certs` from `requirements.txt` and remove
-> `import pip_system_certs.wrapt_requests` from `website-uptime-monitor/main.py`.
-
 ### 3. Install frontend dependencies
 
 ```bash
@@ -121,46 +123,37 @@ cd ..
 > **Windows SSL note:** If `npm install` fails with `UNABLE_TO_VERIFY_LEAF_SIGNATURE`,
 > run `npm config set strict-ssl false` once, then retry.
 
-### 4. Configure environment variables (optional)
-
-```bash
-# Backend
-cp .env.example .env
-
-# Frontend
-cp frontend/.env.example frontend/.env
-```
-
-The defaults work for local development without any changes.
-
----
-
-## Running the application
-
-**Terminal 1 — start the backend:**
+### 4. Start the backend
 
 ```bash
 cd backend
 uvicorn api:app --reload --port 8000
 ```
 
-**Terminal 2 — start the frontend:**
+### 5. Start the frontend
 
 ```bash
 cd frontend
 npm run dev
 ```
 
-Then open **http://localhost:5173** in your browser.
+Open **http://localhost:5173**. API docs at **http://localhost:8000/docs**.
 
-The interactive API documentation is available at **http://localhost:8000/docs**.
+> **Windows note:** If the dashboard shows "API unavailable", create `frontend/.env` with:
+> ```
+> VITE_API_URL=http://127.0.0.1:8000
+> ```
+> Then restart the frontend.
 
-### CLI (no frontend needed)
+---
+
+## CLI usage (no frontend needed)
 
 ```bash
 cd website-uptime-monitor
+
+# Check a website
 python main.py
-# Enter website URL: github.com
 
 # View history
 python main.py --history
@@ -173,18 +166,17 @@ python main.py --history --url github --status UP
 
 ## Environment variables
 
-### Backend (`.env` or shell)
+### Backend
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `REQUEST_TIMEOUT` | `10` | Seconds before a check times out (1–60) |
 | `MAX_HISTORY_DISPLAY` | `100` | Max records shown by `--history` |
 | `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, or `ERROR` |
-| `LOG_FILE` | *(empty)* | Path to a log file — empty means terminal only |
-| `LOG_MAX_BYTES` | `1048576` | Log file rotation size in bytes (1 MB) |
-| `LOG_BACKUP_COUNT` | `3` | Number of rotated log files to keep |
+| `LOG_FILE` | *(empty)* | Path to log file — empty means terminal only |
+| `CORS_ORIGIN` | *(empty)* | Production frontend URL for CORS |
 
-### Frontend (`frontend/.env`)
+### Frontend
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -212,7 +204,7 @@ python main.py --history --url github --status UP
 ```json
 {
   "url": "https://github.com",
-  "checked_at": "2026-10-13 10:00:00",
+  "checked_at": "2026-10-14 10:00:00",
   "status": "UP",
   "status_code": 200,
   "response_time_ms": 312.45,
@@ -222,13 +214,10 @@ python main.py --history --url github --status UP
 
 ### GET /history
 
-Query parameters: `url` (partial match), `status` (`UP`/`DOWN`), `limit` (1–1000, default 100)
+Query parameters: `url` (partial match), `status` (`UP`/`DOWN`), `limit` (1–1000)
 
 ### GET /stats
 
-Query parameters: `url` (partial match)
-
-**Response:**
 ```json
 {
   "total_checks": 10,
@@ -236,7 +225,7 @@ Query parameters: `url` (partial match)
   "down_count": 1,
   "uptime_percent": 90.0,
   "average_response_ms": 287.33,
-  "last_checked": "2026-10-13 10:00:00"
+  "last_checked": "2026-10-14 10:00:00"
 }
 ```
 
@@ -244,102 +233,73 @@ Query parameters: `url` (partial match)
 
 ## Running tests
 
-### Python tests (CLI + API)
-
 ```bash
-# CLI tests
+# CLI tests (34)
 cd website-uptime-monitor
 python -m pytest test_main.py -v
 
-# API tests
+# API tests (22)
 cd backend
 python -m pytest test_api.py -v
-```
 
-### Frontend tests
-
-```bash
+# Frontend tests (17)
 cd frontend
 npm test
 ```
 
-### All tests pass locally:
-
-| Suite | Tests | Result |
+| Suite | Tests | Status |
 |-------|-------|--------|
-| CLI (`test_main.py`) | 28 | ✅ Pass |
-| API (`test_api.py`) | 22 | ✅ Pass |
-| Frontend (`Dashboard.test.jsx`) | 17 | ✅ Pass |
-
----
-
-## Production build
-
-```bash
-cd frontend
-npm run build
-```
-
-The optimised output is written to `frontend/dist/`. Serve it with any static file host (Netlify, Vercel, GitHub Pages, nginx).
-
-Set `VITE_API_URL` to your production backend URL before building:
-
-```bash
-VITE_API_URL=https://api.your-domain.com npm run build
-```
+| CLI | 34 | ✅ Pass |
+| API | 22 | ✅ Pass |
+| Frontend | 17 | ✅ Pass |
 
 ---
 
 ## Deployment
 
-This project has two independently deployable parts:
+### Backend — Render
 
-### Backend (FastAPI)
-- Deploy to any server that runs Python: Railway, Render, Fly.io, a VPS
-- Set `CORS` origins in `backend/api.py` to your frontend's production domain
-- Use a process manager (`systemd`, `supervisor`) or the platform's native process runner
-- `history.json` is written to the same directory as `main.py` — use a persistent disk volume
+1. Create a new **Web Service** on [Render](https://render.com)
+2. Connect `isaad-ui/website-uptime-monitor`
+3. Settings:
+   - Root Directory: `backend`
+   - Build Command: `pip install -r ../requirements.txt`
+   - Start Command: `uvicorn api:app --host 0.0.0.0 --port $PORT`
+4. Add environment variable: `CORS_ORIGIN` = your Netlify URL
 
-### Frontend (React)
-- Run `npm run build` and deploy `frontend/dist/` to Netlify, Vercel, or any static host
-- Set `VITE_API_URL` to your backend's public URL before building
-- No server required — it's a static site
+### Frontend — Netlify
 
-### CORS in production
-Update `backend/api.py` to allow your frontend domain:
-```python
-allow_origins=["https://your-frontend.netlify.app"]
-```
+1. Create a new site on [Netlify](https://netlify.com) from GitHub
+2. Settings:
+   - Base directory: `frontend`
+   - Build command: `npm run build`
+   - Publish directory: `frontend/dist`
+3. Add environment variable: `VITE_API_URL` = your Render URL
+4. Trigger a redeploy
 
 ---
 
 ## Security
 
-- Requests to `localhost`, `127.0.0.1`, and private IP ranges are blocked (SSRF protection)
-- No secrets are stored in source code or committed to Git
-- History writes are atomic — a crash mid-write cannot corrupt the file
-- Logging never records passwords, tokens, or credentials
-- `frontend/.env` and `.env` are gitignored
+- Dangerous URL schemes rejected (`javascript:`, `ftp://`, `file://`)
+- Requests to localhost and private IP ranges blocked (SSRF protection)
+- No secrets in source code or Git history
+- Atomic history writes prevent data corruption on crash
+- CORS restricted to known frontend origins
 
 ---
 
 ## Known limitations
 
-- History is stored in a single JSON file. For thousands of records, migrate to SQLite
-- No user authentication — anyone with access to the API can check URLs and read history
-- No scheduled automatic monitoring — checks are triggered manually via the dashboard or CLI
-
----
-
-## Screenshots
-
-> Add a screenshot of the dashboard here.
+- History stored in a single JSON file — suitable for hundreds of records
+- No user authentication — single shared history
+- No scheduled automatic monitoring — checks are triggered manually
 
 ---
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions and code style guide.
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
