@@ -39,14 +39,23 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# Allow requests from the React dev server.
-# In production, replace with your actual frontend domain.
+# ---------- CORS ----------
+# Build the allowed origins list from environment + sensible defaults.
+# CORS_ORIGIN env var: set this in Render to your exact Netlify URL,
+# e.g. https://your-app.netlify.app
+_cors_origins = [
+    "http://localhost:5173",   # Vite dev server
+    "http://localhost:3000",   # Create React App dev server
+    "http://127.0.0.1:5173",
+]
+
+_extra = os.environ.get("CORS_ORIGIN", "").strip()
+if _extra:
+    _cors_origins.append(_extra)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",   # Vite (React)
-        "http://localhost:3000",   # Create React App
-    ],
+    allow_origins=_cors_origins,
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
 )

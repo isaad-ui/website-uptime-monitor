@@ -10,7 +10,12 @@ import socket
 import argparse
 from datetime import datetime
 from urllib.parse import urlparse
-import pip_system_certs.wrapt_requests
+import sys
+
+# pip-system-certs patches SSL on Windows to use the system certificate store.
+# On Linux/macOS the system certs are already available to Python, so skip it.
+if sys.platform == "win32":
+    import pip_system_certs.wrapt_requests  # noqa: F401
 from config import REQUEST_TIMEOUT, MAX_HISTORY_DISPLAY, setup_logging
 
 logger = logging.getLogger(__name__)
