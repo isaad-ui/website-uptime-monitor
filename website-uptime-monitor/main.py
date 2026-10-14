@@ -1,4 +1,5 @@
 import logging
+import re
 import requests
 import requests.exceptions
 import time
@@ -40,18 +41,43 @@ def is_private_ip(hostname):
         return False
 
 
-def validate_url(raw):
+def validate_url(raw: str) -> tuple[str | None, str | None]:
     """
     Normalise and validate a URL.
     Returns (url, error_message). error_message is None when valid.
+
+    Rules:
+    - Strip leading/trailing whitespace.
+    - Only http:// and https:// schemes are allowed.
+    - Any other scheme (ftp://, javascript:, etc.) is rejected before prepending https://.
+    - Add https:// when no scheme is present.
+    - Reject empty, localhost, private IPs, and unparseable hostnames.
     """
+    raw = raw.strip()
+
+    if not raw:
+        return None, "Invalid URL: URL must not be empty."
+
+    # Reject non-http schemes before we do anything else.
+    # This catches ftp://, javascript:, file://, data:, etc.
+    # We check both "scheme://" and bare "scheme:" (e.g. javascript:alert(1)).
+    scheme_match = re.match(r'^([a-zA-Z][a-zA-Z0-9+\-.]*):(.{0,2})', raw)
+    if scheme_match:
+        scheme = scheme_match.group(1).lower()
+        after = scheme_match.group(2)
+        # Allow http and https only; reject anything else that looks like a scheme
+        if scheme not in ("http", "https"):
+            logger.warning("Rejected unsupported URL scheme %r", scheme)
+            sep = "://" if after.startswith("//") else ":"
+            return None, f"Invalid URL: only http:// and https:// are supported (got {scheme}{sep})."
+
     if not raw.startswith(("http://", "https://")):
         raw = "https://" + raw
 
     parsed = urlparse(raw)
     hostname = parsed.hostname
 
-    if not hostname:
+    if not hostname or hostname in ("", "."):
         logger.warning("URL validation failed — could not parse hostname: %r", raw)
         return None, "Invalid URL: could not parse hostname."
 

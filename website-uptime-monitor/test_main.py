@@ -37,6 +37,35 @@ class TestValidateUrl(unittest.TestCase):
         _, err = main.validate_url("https://")
         self.assertIsNotNone(err)
 
+    def test_rejects_ftp_scheme(self):
+        _, err = main.validate_url("ftp://example.com")
+        self.assertIsNotNone(err)
+        self.assertIn("ftp", err.lower())
+
+    def test_rejects_javascript_scheme(self):
+        _, err = main.validate_url("javascript:alert(1)")
+        self.assertIsNotNone(err)
+        self.assertIn("javascript", err.lower())
+
+    def test_rejects_file_scheme(self):
+        _, err = main.validate_url("file:///etc/passwd")
+        self.assertIsNotNone(err)
+        self.assertIn("file", err.lower())
+
+    def test_rejects_empty_string(self):
+        _, err = main.validate_url("")
+        self.assertIsNotNone(err)
+
+    def test_strips_whitespace(self):
+        url, err = main.validate_url("  http://example.com  ")
+        self.assertIsNone(err)
+        self.assertEqual(url, "http://example.com")
+
+    def test_accepts_url_with_path_and_query(self):
+        url, err = main.validate_url("http://example.com:8080/path?q=1")
+        self.assertIsNone(err)
+        self.assertEqual(url, "http://example.com:8080/path?q=1")
+
 
 class TestIsPrivateIp(unittest.TestCase):
 
