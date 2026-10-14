@@ -13,6 +13,19 @@ import StatusBadge from './StatusBadge'
 import HistoryFilters from './HistoryFilters'
 import LoadingSpinner from './LoadingSpinner'
 
+/** Format "2026-10-14 09:27:37" → "Oct 14, 9:27 AM" */
+function formatTime(datetimeStr) {
+  if (!datetimeStr) return '—'
+  const d = new Date(datetimeStr.replace(' ', 'T'))
+  if (isNaN(d)) return datetimeStr
+  return d.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
 const PAGE_SIZE = 20
 
 export default function HistoryTable({ refreshKey = 0 }) {
@@ -82,9 +95,17 @@ export default function HistoryTable({ refreshKey = 0 }) {
 
       {!loading && !error && filtered.length === 0 && (
         <div className="empty-state" role="status">
-          {allRecords.length === 0
-            ? 'No checks recorded yet. Use the form above to check a website.'
-            : 'No records match your filters.'}
+          <div className="empty-state__icon" aria-hidden="true">
+            {allRecords.length === 0 ? '🔍' : '⚙️'}
+          </div>
+          <p className="empty-state__text">
+            {allRecords.length === 0
+              ? 'No checks yet. Enter a URL above and hit Check.'
+              : 'No records match your filters.'}
+          </p>
+          {allRecords.length === 0 ? null : (
+            <p className="empty-state__hint">Try clearing the filters.</p>
+          )}
         </div>
       )}
 
@@ -104,7 +125,7 @@ export default function HistoryTable({ refreshKey = 0 }) {
               <tbody>
                 {pageRecords.map((r, i) => (
                   <tr key={i} className={r.status === 'DOWN' ? 'row--down' : ''}>
-                    <td className="cell--time">{r.checked_at}</td>
+                    <td className="cell--time" title={r.checked_at}>{formatTime(r.checked_at)}</td>
                     <td className="cell--url" title={r.url}>{r.url}</td>
                     <td><StatusBadge status={r.status} size="sm" /></td>
                     <td>{r.status_code ?? '—'}</td>
