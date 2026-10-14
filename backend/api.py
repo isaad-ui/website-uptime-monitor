@@ -44,9 +44,10 @@ app = FastAPI(
 # CORS_ORIGIN env var: set this in Render to your exact Netlify URL,
 # e.g. https://your-app.netlify.app
 _cors_origins = [
-    "http://localhost:5173",   # Vite dev server
-    "http://localhost:3000",   # Create React App dev server
+    "http://localhost:5173",
+    "http://localhost:3000",
     "http://127.0.0.1:5173",
+    "https://website-uptime-monitor.netlify.app",  # production frontend
 ]
 
 _extra = os.environ.get("CORS_ORIGIN", "").strip()
